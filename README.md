@@ -81,6 +81,8 @@ En Easyhook pega esa URL como webhook y suscribete a los eventos. Despues Easyho
 codex-whatsapp set-secret <BEARER_SECRET_DE_EASYHOOK>
 ```
 
+Tambien puedes pegar el bearer secret directamente en la terminal donde esta corriendo `codex-whatsapp start`; cuando aparece la URL, el proceso te lo pide. Si lo pegas ahi, no necesitas reiniciar.
+
 El flujo esperado es:
 
 ```text
@@ -88,9 +90,9 @@ El flujo esperado es:
 2. Copia Webhook URL en Easyhook
 3. Suscribete a los eventos en Easyhook
 4. Copia el bearer secret que Easyhook te entrega
-5. Corre codex-whatsapp set-secret <secret>
-6. Reinicia codex-whatsapp start
-7. Desde tu numero autorizado manda /status por WhatsApp
+5. Pegalo en la terminal de codex-whatsapp cuando te lo pida
+6. Desde tu numero autorizado manda /status por WhatsApp
+7. Deja esa terminal abierta; es el servidor local
 ```
 
 ## Variables

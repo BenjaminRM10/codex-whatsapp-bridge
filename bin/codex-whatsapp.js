@@ -50,6 +50,7 @@ const state = {
   output: "",
   tunnelProc: null,
   tunnelUrl: "",
+  awaitingSecret: false,
 };
 
 if (command === "start") {
@@ -159,6 +160,7 @@ function startServer() {
       if (config.webhookBearerSecret) {
         const auth = req.headers.authorization || "";
         if (auth !== `Bearer ${config.webhookBearerSecret}`) {
+          console.warn(`Webhook rechazado: bearer secret incorrecto o ausente. auth=${auth ? "present" : "missing"}`);
           return json(res, 401, { error: "unauthorized" });
         }
       }
@@ -214,6 +216,10 @@ function startCloudflareTunnel() {
 
     console.log(`\n${message}\n`);
 
+    if (!config.webhookBearerSecret) {
+      void collectWebhookSecretInCurrentProcess();
+    }
+
     if (config.notifyOnStart) {
       const firstUser = [...config.allowedUsers][0];
       if (firstUser) void sendText(firstUser, message);
@@ -244,6 +250,8 @@ function tunnelOnboardingText(webhookUrl) {
     "|                                                            |",
     "| Prueba desde tu WhatsApp autorizado:                       |",
     "|   /status                                                  |",
+    "|                                                            |",
+    "| Deja esta terminal abierta. Este es el servidor.           |",
     "+------------------------------------------------------------+",
   ] : [
     "+------------------------------------------------------------+",
@@ -257,29 +265,64 @@ function tunnelOnboardingText(webhookUrl) {
     "|                                                            |",
     "|    codex-whatsapp set-secret <BEARER_SECRET_DE_EASYHOOK>   |",
     "|                                                            |",
-    "| 5. Reinicia:                                               |",
-    "|    codex-whatsapp start                                    |",
+    "| O pegalo aqui abajo cuando esta terminal lo pida.          |",
+    "|                                                            |",
+    "| Deja esta terminal abierta. Este es el servidor.           |",
     "+------------------------------------------------------------+",
   ];
 
   return lines.join("\n");
 }
 
+async function collectWebhookSecretInCurrentProcess() {
+  if (state.awaitingSecret || !process.stdin.isTTY) return;
+  state.awaitingSecret = true;
+
+  const secret = await promptSingle("Pega aqui el bearer secret de Easyhook, o presiona Enter para hacerlo despues");
+  state.awaitingSecret = false;
+
+  if (!secret) {
+    console.log("Sin bearer secret por ahora. Puedes guardarlo luego con:");
+    console.log("  codex-whatsapp set-secret <BEARER_SECRET_DE_EASYHOOK>");
+    console.log("Mientras tanto, esta terminal debe quedarse abierta.");
+    return;
+  }
+
+  const existing = readEnvFile(CONFIG_FILE);
+  existing.WEBHOOK_BEARER_SECRET = secret.trim();
+  fs.mkdirSync(CONFIG_DIR, { recursive: true });
+  fs.writeFileSync(CONFIG_FILE, formatEnv(existing), { mode: 0o600 });
+  config.webhookBearerSecret = secret.trim();
+
+  console.log("");
+  console.log("Bearer secret guardado. No necesitas reiniciar.");
+  console.log("Ahora manda /status desde tu WhatsApp autorizado.");
+  console.log("Esta terminal debe quedarse abierta para recibir mensajes.");
+}
+
 async function handleWebhook(event) {
   const msg = extractMessage(event);
-  if (!msg.text || !msg.from) return;
+  if (!msg.text || !msg.from) {
+    console.log(`Webhook recibido sin mensaje de texto reconocible. type=${event?.type || event?.event || "unknown"}`);
+    return;
+  }
 
   const from = onlyDigits(msg.from);
   state.lastFrom = from;
+  console.log(`WhatsApp <- ${from}: ${msg.text}`);
 
   if (!config.allowedUsers.has(from)) {
+    console.warn(`Numero no autorizado: ${from}`);
     await sendText(from, "No tienes permiso para controlar Codex desde este numero.");
     return;
   }
 
   const text = msg.text.trim();
   const response = await handleCommand(text, from);
-  if (response) await sendText(from, response);
+  if (response) {
+    await sendText(from, response);
+    console.log(`WhatsApp -> ${from}: ${response.split("\n")[0]}`);
+  }
 }
 
 async function handleCommand(text, from) {
@@ -465,13 +508,19 @@ function extractMessage(event) {
   const candidates = [
     event?.message,
     event?.data?.message,
+    event?.payload?.message,
+    event?.messages?.[0],
+    event?.data?.messages?.[0],
+    event?.payload?.messages?.[0],
     event?.entry?.[0]?.changes?.[0]?.value?.messages?.[0],
+    event?.data,
+    event?.payload,
     event,
   ].filter(Boolean);
 
   for (const msg of candidates) {
-    const from = msg.from || msg.sender || msg.contact?.wa_id;
-    const text = msg.text?.body || msg.text || msg.body || msg.message?.text?.body;
+    const from = msg.from || msg.sender || msg.contact?.wa_id || msg.contact?.phone || msg.customer?.phone || msg.user?.id;
+    const text = msg.text?.body || msg.text || msg.body || msg.content?.text || msg.message?.text?.body || msg.message?.text || msg.message?.body;
     if (from && text) return { from, text: String(text) };
   }
 
