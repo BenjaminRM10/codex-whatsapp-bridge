@@ -201,27 +201,16 @@ function startCloudflareTunnel() {
   });
 
   state.tunnelProc = child;
+  let tunnelLog = "";
 
   const onData = (chunk) => {
     const text = stripAnsi(String(chunk));
-    process.stdout.write(text);
+    tunnelLog = `${tunnelLog}${text}`.slice(-4000);
     const match = text.match(/https:\/\/[a-zA-Z0-9.-]+\.trycloudflare\.com/);
     if (!match || state.tunnelUrl) return;
 
     state.tunnelUrl = `${match[0]}/webhook`;
-    const message = [
-      "Cloudflare Tunnel activo.",
-      "",
-      "Paso 1: pega esta URL en Easyhook y suscribete a los eventos:",
-      `Webhook URL: ${state.tunnelUrl}`,
-      "",
-      config.webhookBearerSecret
-        ? "Bearer secret ya configurado. Manda /status por WhatsApp para probar."
-        : "Paso 2: Easyhook te dara un bearer secret. Guardalo con:",
-      config.webhookBearerSecret ? "" : "codex-whatsapp set-secret <BEARER_SECRET_DE_EASYHOOK>",
-      config.webhookBearerSecret ? "" : "",
-      config.webhookBearerSecret ? "" : "Paso 3: reinicia con codex-whatsapp start y manda /status por WhatsApp.",
-    ].filter(Boolean).join("\n");
+    const message = tunnelOnboardingText(state.tunnelUrl);
 
     console.log(`\n${message}\n`);
 
@@ -236,8 +225,44 @@ function startCloudflareTunnel() {
 
   child.on("exit", (code, signal) => {
     state.tunnelProc = null;
+    if (!state.tunnelUrl) {
+      console.error("cloudflared termino antes de entregar una URL publica.");
+      console.error(`code=${code ?? "null"} signal=${signal ?? "null"}`);
+      if (tunnelLog.trim()) console.error(tunnelLog.trim());
+      return;
+    }
     console.error(`cloudflared termino. code=${code ?? "null"} signal=${signal ?? "null"}`);
   });
+}
+
+function tunnelOnboardingText(webhookUrl) {
+  const lines = config.webhookBearerSecret ? [
+    "+------------------------------------------------------------+",
+    "| Codex WhatsApp listo                                       |",
+    "+------------------------------------------------------------+",
+    "| Webhook configurado y bearer secret detectado.             |",
+    "|                                                            |",
+    "| Prueba desde tu WhatsApp autorizado:                       |",
+    "|   /status                                                  |",
+    "+------------------------------------------------------------+",
+  ] : [
+    "+------------------------------------------------------------+",
+    "| Siguiente paso: configurar Easyhook                        |",
+    "+------------------------------------------------------------+",
+    "| 1. En Easyhook, crea/edita el webhook.                     |",
+    "| 2. Pega esta URL:                                          |",
+    `|    ${webhookUrl}`,
+    "| 3. Suscribete a los eventos message.* y status.*.          |",
+    "| 4. Easyhook te dara un bearer secret. Guardalo con:        |",
+    "|                                                            |",
+    "|    codex-whatsapp set-secret <BEARER_SECRET_DE_EASYHOOK>   |",
+    "|                                                            |",
+    "| 5. Reinicia:                                               |",
+    "|    codex-whatsapp start                                    |",
+    "+------------------------------------------------------------+",
+  ];
+
+  return lines.join("\n");
 }
 
 async function handleWebhook(event) {
