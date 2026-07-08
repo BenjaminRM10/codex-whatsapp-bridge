@@ -56,6 +56,15 @@ Para guardar el bearer secret que Easyhook entrega despues de registrar la URL:
 codex-whatsapp set-secret <BEARER_SECRET_DE_EASYHOOK>
 ```
 
+Si borraste el webhook en Easyhook o generaste uno nuevo, borra el bearer secret viejo local:
+
+```bash
+codex-whatsapp reset-secret
+codex-whatsapp start
+```
+
+Luego pega la nueva URL en Easyhook y guarda el nuevo bearer secret.
+
 Arranque para levantar Codex WhatsApp y obtener la URL publica:
 
 ```bash

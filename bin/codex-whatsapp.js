@@ -28,6 +28,11 @@ if (command === "set-secret") {
   process.exit(0);
 }
 
+if (command === "reset-secret") {
+  resetWebhookSecret();
+  process.exit(0);
+}
+
 const config = {
   port: Number(process.env.PORT || 8787),
   host: process.env.HOST || "127.0.0.1",
@@ -132,6 +137,17 @@ async function setWebhookSecret(secretArg) {
 
   console.log(`Saved WEBHOOK_BEARER_SECRET in ${CONFIG_FILE}`);
   console.log("Restart the daemon:");
+  console.log("  codex-whatsapp start");
+}
+
+function resetWebhookSecret() {
+  const existing = readEnvFile(CONFIG_FILE);
+  existing.WEBHOOK_BEARER_SECRET = "";
+  fs.mkdirSync(CONFIG_DIR, { recursive: true });
+  fs.writeFileSync(CONFIG_FILE, formatEnv(existing), { mode: 0o600 });
+
+  console.log(`Cleared WEBHOOK_BEARER_SECRET in ${CONFIG_FILE}`);
+  console.log("Start again to get the current webhook URL and configure Easyhook:");
   console.log("  codex-whatsapp start");
 }
 
@@ -247,6 +263,12 @@ function tunnelOnboardingText(webhookUrl) {
     "| Codex WhatsApp listo                                       |",
     "+------------------------------------------------------------+",
     "| Webhook configurado y bearer secret detectado.             |",
+    "|                                                            |",
+    "| URL actual del webhook:                                    |",
+    `|    ${webhookUrl}`,
+    "|                                                            |",
+    "| Si borraste/recreaste el webhook en Easyhook, corre:       |",
+    "|   codex-whatsapp reset-secret                              |",
     "|                                                            |",
     "| Prueba desde tu WhatsApp autorizado:                       |",
     "|   /status                                                  |",
@@ -462,6 +484,7 @@ function helpText() {
   return `Comandos:
 /setup
 /set-secret <bearer_secret_de_easyhook>
+/reset-secret
 /status
 /cwd /ruta/del/repo
 /resume
@@ -480,6 +503,7 @@ function helpText() {
 Arranque:
 codex-whatsapp setup
 codex-whatsapp set-secret <bearer_secret_de_easyhook>
+codex-whatsapp reset-secret
 codex-whatsapp start`;
 }
 
