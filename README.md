@@ -33,7 +33,6 @@ Lo demas se configura automaticamente:
 - `HOST=127.0.0.1`
 - `PORT=8787`
 - `TUNNEL=auto`
-- `WEBHOOK_BEARER_SECRET` generado automaticamente
 
 Si quieres instalar sin onboarding:
 
@@ -53,6 +52,12 @@ Puedes volver a abrir el onboarding cuando quieras:
 codex-whatsapp setup
 ```
 
+Para guardar el bearer secret que Easyhook entrega despues de registrar la URL:
+
+```bash
+codex-whatsapp set-secret <BEARER_SECRET_DE_EASYHOOK>
+```
+
 Arranque para levantar Codex WhatsApp y obtener la URL publica:
 
 ```bash
@@ -66,22 +71,28 @@ cp .env.example .env
 npm run start:tunnel
 ```
 
-La herramienta arranca el servidor local. Si detecta que esta escuchando en una IP local o privada, abre Cloudflare Tunnel automaticamente. En consola imprimira:
+La herramienta arranca el servidor local. Si detecta que esta escuchando en una IP local o privada, abre Cloudflare Tunnel automaticamente. En consola imprimira la URL:
 
 ```text
 Webhook URL: https://xxxx.trycloudflare.com/webhook
-Bearer secret: abc123...
 ```
 
-En Easyhook pega esa URL como webhook y el bearer secret como secreto/bearer del webhook.
+En Easyhook pega esa URL como webhook y suscribete a los eventos. Despues Easyhook te dara un bearer secret. Guardalo con:
+
+```bash
+codex-whatsapp set-secret <BEARER_SECRET_DE_EASYHOOK>
+```
 
 El flujo esperado es:
 
 ```text
 1. Corre codex-whatsapp start
 2. Copia Webhook URL en Easyhook
-3. Copia Bearer secret en Easyhook
-4. Desde tu numero autorizado manda /status por WhatsApp
+3. Suscribete a los eventos en Easyhook
+4. Copia el bearer secret que Easyhook te entrega
+5. Corre codex-whatsapp set-secret <secret>
+6. Reinicia codex-whatsapp start
+7. Desde tu numero autorizado manda /status por WhatsApp
 ```
 
 ## Variables
@@ -95,7 +106,7 @@ HOST=127.0.0.1
 TUNNEL=auto
 NOTIFY_ON_START=0
 DEFAULT_CWD=/home/benjaminrm10/repos/agent-tool
-WEBHOOK_BEARER_SECRET=generado_por_setup
+WEBHOOK_BEARER_SECRET=lo_entrega_easyhook_despues_de_configurar_url
 CODEX_BIN=codex
 CODEX_USE_PTY=1
 ```
