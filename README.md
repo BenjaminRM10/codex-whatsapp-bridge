@@ -16,7 +16,6 @@ El instalador abre un onboarding para capturar:
 - `EASYHOOK_FROM`
 - `ALLOWED_USERS`
 - ruta default del repo
-- binario de Codex, normalmente `codex`
 
 Ejemplo de respuestas:
 
@@ -25,7 +24,6 @@ Easyhook API key: eh_live_xxx
 WhatsApp sender number from Easyhook: 5218661479075
 Your WhatsApp number(s) allowed to control Codex: 5215660069997
 Default repo/folder where Codex should run: /home/benjaminrm10/repos/agent-tool
-Codex binary: codex
 ```
 
 Lo demas se configura automaticamente:

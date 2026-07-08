@@ -74,7 +74,7 @@ async function runSetup() {
   values.EASYHOOK_FROM = onlyDigits(await ask(rl, scriptedAnswers, "WhatsApp sender number from Easyhook, digits only. Example: 5218661479075", existing.EASYHOOK_FROM || ""));
   values.ALLOWED_USERS = normalizeCsvDigits(await ask(rl, scriptedAnswers, "Your WhatsApp number(s) allowed to control Codex, comma separated", existing.ALLOWED_USERS || ""));
   values.DEFAULT_CWD = await ask(rl, scriptedAnswers, "Default repo/folder where Codex should run", existing.DEFAULT_CWD || process.cwd());
-  values.CODEX_BIN = await ask(rl, scriptedAnswers, "Codex binary", existing.CODEX_BIN || "codex");
+  values.CODEX_BIN = existing.CODEX_BIN || "codex";
   values.PORT = existing.PORT || "8787";
   values.HOST = existing.HOST || "127.0.0.1";
   values.TUNNEL = existing.TUNNEL || "auto";
