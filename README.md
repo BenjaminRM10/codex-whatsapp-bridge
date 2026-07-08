@@ -4,10 +4,26 @@ MVP local para controlar Codex desde WhatsApp usando Easyhook.
 
 ## Configuracion
 
-Instalacion desde GitHub, despues de publicar el repo:
+Instalacion:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/BenjaminRM10/codex-whatsapp-bridge/main/install.sh | bash
+```
+
+El instalador abre un onboarding para capturar:
+
+- `EASYHOOK_API_KEY`
+- `EASYHOOK_FROM`
+- `ALLOWED_USERS`
+- ruta default del repo
+- tunnel automatico
+- notificacion por WhatsApp al arrancar
+- variables opcionales como `WEBHOOK_BEARER_SECRET`, `CODEX_BIN`, `CODEX_USE_PTY`
+
+Si quieres instalar sin onboarding:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/BenjaminRM10/codex-whatsapp-bridge/main/install.sh | SKIP_SETUP=1 bash
 ```
 
 Mientras pruebas desde este checkout:
@@ -16,13 +32,13 @@ Mientras pruebas desde este checkout:
 REPO_RAW_BASE=file://$PWD bash ./install.sh
 ```
 
-Luego edita:
+Puedes volver a abrir el onboarding cuando quieras:
 
-```text
-~/.config/codex-whatsapp/.env
+```bash
+codex-whatsapp setup
 ```
 
-Arranque:
+Arranque para levantar el tunnel y obtener la URL publica:
 
 ```bash
 codex-whatsapp start --tunnel

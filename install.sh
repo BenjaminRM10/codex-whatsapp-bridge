@@ -65,8 +65,13 @@ case ":$PATH:" in
 esac
 
 echo
-echo "Edit config:"
-echo "  $CONFIG_DIR/.env"
-echo
-echo "Start:"
-echo "  $APP_NAME start --tunnel"
+if [ "${SKIP_SETUP:-0}" = "1" ]; then
+  echo "Edit config:"
+  echo "  $CONFIG_DIR/.env"
+  echo
+  echo "Start:"
+  echo "  $APP_NAME start --tunnel"
+else
+  echo "Starting onboarding..."
+  CODEX_WHATSAPP_CONFIG_DIR="$CONFIG_DIR" "$INSTALL_DIR/$APP_NAME" setup
+fi

@@ -4,6 +4,10 @@ import { spawn, spawnSync } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import readline from "node:readline/promises";
+
+const CONFIG_DIR = process.env.CODEX_WHATSAPP_CONFIG_DIR || process.env.CONFIG_DIR || path.join(process.env.HOME || process.cwd(), ".config", "codex-whatsapp");
+const CONFIG_FILE = path.join(CONFIG_DIR, ".env");
 
 loadDotEnv();
 
@@ -11,6 +15,11 @@ const command = process.argv[2] || "start";
 
 if (command === "help" || command === "--help" || command === "-h") {
   console.log(helpText());
+  process.exit(0);
+}
+
+if (command === "setup") {
+  await runSetup();
   process.exit(0);
 }
 
@@ -43,6 +52,66 @@ if (command === "start") {
 } else {
   console.error(`Unknown command: ${command}`);
   process.exit(1);
+}
+
+async function runSetup() {
+  const existing = readEnvFile(CONFIG_FILE);
+  const scriptedAnswers = process.stdin.isTTY ? null : fs.readFileSync(0, "utf8").split(/\r?\n/);
+  const rl = scriptedAnswers ? null : readline.createInterface({ input: process.stdin, output: process.stdout });
+
+  console.log("codex-whatsapp setup");
+  console.log(`Config file: ${CONFIG_FILE}`);
+  console.log("");
+
+  const values = {};
+  values.EASYHOOK_API_KEY = await ask(rl, scriptedAnswers, "Easyhook API key", existing.EASYHOOK_API_KEY || "");
+  values.EASYHOOK_FROM = onlyDigits(await ask(rl, scriptedAnswers, "Easyhook sender/from WhatsApp number digits only", existing.EASYHOOK_FROM || ""));
+  values.ALLOWED_USERS = normalizeCsvDigits(await ask(rl, scriptedAnswers, "Allowed WhatsApp users comma separated", existing.ALLOWED_USERS || ""));
+  values.PORT = await ask(rl, scriptedAnswers, "Local port", existing.PORT || "8787");
+  values.HOST = await ask(rl, scriptedAnswers, "Local host", existing.HOST || "127.0.0.1");
+  values.TUNNEL = yesNo(await ask(rl, scriptedAnswers, "Start Cloudflare Tunnel automatically? [Y/n]", existing.TUNNEL === "0" ? "n" : "Y")) ? "1" : "0";
+  values.NOTIFY_ON_START = yesNo(await ask(rl, scriptedAnswers, "Send webhook URL by WhatsApp on start? [y/N]", existing.NOTIFY_ON_START === "1" ? "y" : "N")) ? "1" : "0";
+  values.DEFAULT_CWD = await ask(rl, scriptedAnswers, "Default repo path", existing.DEFAULT_CWD || process.cwd());
+  values.WEBHOOK_BEARER_SECRET = await ask(rl, scriptedAnswers, "Webhook bearer secret optional", existing.WEBHOOK_BEARER_SECRET || "");
+  values.CODEX_BIN = await ask(rl, scriptedAnswers, "Codex binary", existing.CODEX_BIN || "codex");
+  values.CODEX_USE_PTY = yesNo(await ask(rl, scriptedAnswers, "Use pseudo-TTY for Codex? [Y/n]", existing.CODEX_USE_PTY === "0" ? "n" : "Y")) ? "1" : "0";
+
+  if (rl) rl.close();
+
+  fs.mkdirSync(CONFIG_DIR, { recursive: true });
+  fs.writeFileSync(CONFIG_FILE, formatEnv(values), { mode: 0o600 });
+
+  console.log("");
+  console.log(`Config saved: ${CONFIG_FILE}`);
+  console.log("");
+  console.log("Next:");
+  console.log("  codex-whatsapp start --tunnel");
+  console.log("");
+
+  if (values.TUNNEL === "1") {
+    console.log("When it starts, copy this URL into Easyhook webhooks:");
+    console.log("  https://xxxx.trycloudflare.com/webhook");
+  }
+
+  if (process.argv.includes("--start")) {
+    console.log("");
+    console.log("Starting daemon now...");
+    loadDotEnv();
+    process.env.TUNNEL = values.TUNNEL;
+    await startServerWithEnv();
+  }
+}
+
+function startServerWithEnv() {
+  return new Promise((resolve) => {
+    const args = [process.argv[1], "start"];
+    if (process.env.TUNNEL === "1") args.push("--tunnel");
+    const child = spawn(process.execPath, args, {
+      stdio: "inherit",
+      env: process.env,
+    });
+    child.on("exit", (code) => resolve(code ?? 0));
+  });
 }
 
 function startServer() {
@@ -284,6 +353,7 @@ function tailText() {
 
 function helpText() {
   return `Comandos:
+/setup
 /status
 /cwd /ruta/del/repo
 /resume
@@ -300,6 +370,7 @@ function helpText() {
 /stop
 
 Arranque:
+codex-whatsapp setup
 codex-whatsapp start --tunnel`;
 }
 
@@ -361,6 +432,56 @@ function quoteShell(value) {
   return `'${String(value).replaceAll("'", "'\\''")}'`;
 }
 
+async function ask(rl, scriptedAnswers, label, defaultValue) {
+  const suffix = defaultValue ? ` (${maskSecret(defaultValue)})` : "";
+  if (scriptedAnswers) {
+    const answer = scriptedAnswers.shift() ?? "";
+    console.log(`${label}${suffix}: ${answer}`);
+    return answer.trim() || defaultValue;
+  }
+  const answer = await rl.question(`${label}${suffix}: `);
+  return answer.trim() || defaultValue;
+}
+
+function maskSecret(value) {
+  if (String(value).startsWith("eh_") && String(value).length > 12) {
+    return `${String(value).slice(0, 8)}...${String(value).slice(-4)}`;
+  }
+  return value;
+}
+
+function yesNo(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return normalized === "" || normalized === "y" || normalized === "yes" || normalized === "s" || normalized === "si" || normalized === "1" || normalized === "true";
+}
+
+function normalizeCsvDigits(value) {
+  return String(value || "")
+    .split(",")
+    .map((item) => onlyDigits(item))
+    .filter(Boolean)
+    .join(",");
+}
+
+function readEnvFile(file) {
+  const values = {};
+  if (!fs.existsSync(file)) return values;
+  for (const line of fs.readFileSync(file, "utf8").split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const index = trimmed.indexOf("=");
+    if (index === -1) continue;
+    values[trimmed.slice(0, index)] = trimmed.slice(index + 1);
+  }
+  return values;
+}
+
+function formatEnv(values) {
+  return Object.entries(values)
+    .map(([key, value]) => `${key}=${String(value).replace(/\n/g, "")}`)
+    .join("\n") + "\n";
+}
+
 function readBody(req) {
   return new Promise((resolve, reject) => {
     let body = "";
@@ -392,7 +513,7 @@ function required(name) {
 
 function loadDotEnv() {
   const files = [
-    path.join(process.env.HOME || "", ".config", "codex-whatsapp", ".env"),
+    CONFIG_FILE,
     path.join(process.cwd(), ".env"),
   ];
 
