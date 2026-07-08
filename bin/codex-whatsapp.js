@@ -56,7 +56,8 @@ if (command === "start") {
 
 async function runSetup() {
   const existing = readEnvFile(CONFIG_FILE);
-  const scriptedAnswers = process.stdin.isTTY ? null : fs.readFileSync(0, "utf8").split(/\r?\n/);
+  const stdinText = process.stdin.isTTY ? "" : fs.readFileSync(0, "utf8");
+  const scriptedAnswers = stdinText.trim() ? stdinText.split(/\r?\n/) : null;
   const rl = scriptedAnswers ? null : readline.createInterface({ input: process.stdin, output: process.stdout });
 
   console.log("codex-whatsapp setup");

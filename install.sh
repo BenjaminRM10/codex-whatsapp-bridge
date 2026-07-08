@@ -73,5 +73,10 @@ if [ "${SKIP_SETUP:-0}" = "1" ]; then
   echo "  $APP_NAME start --tunnel"
 else
   echo "Starting onboarding..."
-  CODEX_WHATSAPP_CONFIG_DIR="$CONFIG_DIR" "$INSTALL_DIR/$APP_NAME" setup
+  if [ -r /dev/tty ] && [ -w /dev/tty ]; then
+    CODEX_WHATSAPP_CONFIG_DIR="$CONFIG_DIR" "$INSTALL_DIR/$APP_NAME" setup </dev/tty >/dev/tty
+  else
+    echo "No interactive terminal detected. Run this after install:"
+    echo "  $APP_NAME setup"
+  fi
 fi
