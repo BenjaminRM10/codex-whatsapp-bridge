@@ -16,9 +16,24 @@ El instalador abre un onboarding para capturar:
 - `EASYHOOK_FROM`
 - `ALLOWED_USERS`
 - ruta default del repo
-- tunnel automatico
-- notificacion por WhatsApp al arrancar
-- variables opcionales como `WEBHOOK_BEARER_SECRET`, `CODEX_BIN`, `CODEX_USE_PTY`
+- binario de Codex, normalmente `codex`
+
+Ejemplo de respuestas:
+
+```text
+Easyhook API key: eh_live_xxx
+WhatsApp sender number from Easyhook: 5218661479075
+Your WhatsApp number(s) allowed to control Codex: 5215660069997
+Default repo/folder where Codex should run: /home/benjaminrm10/repos/agent-tool
+Codex binary: codex
+```
+
+Lo demas se configura automaticamente:
+
+- `HOST=127.0.0.1`
+- `PORT=8787`
+- `TUNNEL=auto`
+- `WEBHOOK_BEARER_SECRET` generado automaticamente
 
 Si quieres instalar sin onboarding:
 
@@ -38,10 +53,10 @@ Puedes volver a abrir el onboarding cuando quieras:
 codex-whatsapp setup
 ```
 
-Arranque para levantar el tunnel y obtener la URL publica:
+Arranque para levantar Codex WhatsApp y obtener la URL publica:
 
 ```bash
-codex-whatsapp start --tunnel
+codex-whatsapp start
 ```
 
 Modo desarrollo:
@@ -51,13 +66,23 @@ cp .env.example .env
 npm run start:tunnel
 ```
 
-La herramienta arranca el servidor local y un Cloudflare Tunnel automaticamente. En consola imprimira una URL como:
+La herramienta arranca el servidor local. Si detecta que esta escuchando en una IP local o privada, abre Cloudflare Tunnel automaticamente. En consola imprimira:
 
 ```text
-https://xxxx.trycloudflare.com/webhook
+Webhook URL: https://xxxx.trycloudflare.com/webhook
+Bearer secret: abc123...
 ```
 
-Esa es la URL que debes pegar en Easyhook.
+En Easyhook pega esa URL como webhook y el bearer secret como secreto/bearer del webhook.
+
+El flujo esperado es:
+
+```text
+1. Corre codex-whatsapp start
+2. Copia Webhook URL en Easyhook
+3. Copia Bearer secret en Easyhook
+4. Desde tu numero autorizado manda /status por WhatsApp
+```
 
 ## Variables
 
@@ -67,15 +92,15 @@ EASYHOOK_FROM=5218661479075
 ALLOWED_USERS=5215660069997,521XXXXXXXXXX
 PORT=8787
 HOST=127.0.0.1
-TUNNEL=1
+TUNNEL=auto
 NOTIFY_ON_START=0
 DEFAULT_CWD=/home/benjaminrm10/repos/agent-tool
-WEBHOOK_BEARER_SECRET=opcional
+WEBHOOK_BEARER_SECRET=generado_por_setup
 CODEX_BIN=codex
 CODEX_USE_PTY=1
 ```
 
-`NOTIFY_ON_START=1` manda la URL publica por WhatsApp al primer numero de `ALLOWED_USERS`.
+Puedes forzar el tunnel con `codex-whatsapp start --tunnel` o desactivarlo con `codex-whatsapp start --no-tunnel`.
 
 ## Comandos WhatsApp
 

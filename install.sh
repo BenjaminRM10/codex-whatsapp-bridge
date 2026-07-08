@@ -35,7 +35,7 @@ EASYHOOK_FROM=
 ALLOWED_USERS=
 PORT=8787
 HOST=127.0.0.1
-TUNNEL=1
+TUNNEL=auto
 NOTIFY_ON_START=0
 DEFAULT_CWD=$PWD
 WEBHOOK_BEARER_SECRET=
@@ -52,7 +52,7 @@ if ! command -v codex >/dev/null 2>&1; then
 fi
 
 if ! command -v cloudflared >/dev/null 2>&1; then
-  echo "Warning: cloudflared was not found. Install it or run without TUNNEL=1." >&2
+  echo "Warning: cloudflared was not found. Install Cloudflare Tunnel before running codex-whatsapp start." >&2
 fi
 
 case ":$PATH:" in
@@ -70,7 +70,7 @@ if [ "${SKIP_SETUP:-0}" = "1" ]; then
   echo "  $CONFIG_DIR/.env"
   echo
   echo "Start:"
-  echo "  $APP_NAME start --tunnel"
+  echo "  $APP_NAME start"
 else
   echo "Starting onboarding..."
   if [ -r /dev/tty ] && [ -w /dev/tty ]; then

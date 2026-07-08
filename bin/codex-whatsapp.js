@@ -26,7 +26,7 @@ if (command === "setup") {
 const config = {
   port: Number(process.env.PORT || 8787),
   host: process.env.HOST || "127.0.0.1",
-  tunnel: process.argv.includes("--tunnel") || process.env.TUNNEL === "1",
+  tunnel: shouldStartTunnel(process.env.HOST || "127.0.0.1"),
   notifyOnStart: process.env.NOTIFY_ON_START === "1",
   easyhookApiKey: required("EASYHOOK_API_KEY"),
   easyhookFrom: required("EASYHOOK_FROM"),
@@ -57,7 +57,7 @@ if (command === "start") {
 async function runSetup() {
   const existing = readEnvFile(CONFIG_FILE);
   const stdinText = process.stdin.isTTY ? "" : fs.readFileSync(0, "utf8");
-  const scriptedAnswers = stdinText.trim() ? stdinText.split(/\r?\n/) : null;
+  const scriptedAnswers = process.stdin.isTTY ? null : stdinText.split(/\r?\n/);
   const rl = scriptedAnswers ? null : readline.createInterface({ input: process.stdin, output: process.stdout });
 
   console.log("codex-whatsapp setup");
@@ -66,18 +66,29 @@ async function runSetup() {
 
   const values = {};
   values.EASYHOOK_API_KEY = await ask(rl, scriptedAnswers, "Easyhook API key", existing.EASYHOOK_API_KEY || "");
-  values.EASYHOOK_FROM = onlyDigits(await ask(rl, scriptedAnswers, "Easyhook sender/from WhatsApp number digits only", existing.EASYHOOK_FROM || ""));
-  values.ALLOWED_USERS = normalizeCsvDigits(await ask(rl, scriptedAnswers, "Allowed WhatsApp users comma separated", existing.ALLOWED_USERS || ""));
-  values.PORT = await ask(rl, scriptedAnswers, "Local port", existing.PORT || "8787");
-  values.HOST = await ask(rl, scriptedAnswers, "Local host", existing.HOST || "127.0.0.1");
-  values.TUNNEL = yesNo(await ask(rl, scriptedAnswers, "Start Cloudflare Tunnel automatically? [Y/n]", existing.TUNNEL === "0" ? "n" : "Y")) ? "1" : "0";
-  values.NOTIFY_ON_START = yesNo(await ask(rl, scriptedAnswers, "Send webhook URL by WhatsApp on start? [y/N]", existing.NOTIFY_ON_START === "1" ? "y" : "N")) ? "1" : "0";
-  values.DEFAULT_CWD = await ask(rl, scriptedAnswers, "Default repo path", existing.DEFAULT_CWD || process.cwd());
-  values.WEBHOOK_BEARER_SECRET = await ask(rl, scriptedAnswers, "Webhook bearer secret optional", existing.WEBHOOK_BEARER_SECRET || "");
+  values.EASYHOOK_FROM = onlyDigits(await ask(rl, scriptedAnswers, "WhatsApp sender number from Easyhook, digits only. Example: 5218661479075", existing.EASYHOOK_FROM || ""));
+  values.ALLOWED_USERS = normalizeCsvDigits(await ask(rl, scriptedAnswers, "Your WhatsApp number(s) allowed to control Codex, comma separated", existing.ALLOWED_USERS || ""));
+  values.DEFAULT_CWD = await ask(rl, scriptedAnswers, "Default repo/folder where Codex should run", existing.DEFAULT_CWD || process.cwd());
   values.CODEX_BIN = await ask(rl, scriptedAnswers, "Codex binary", existing.CODEX_BIN || "codex");
-  values.CODEX_USE_PTY = yesNo(await ask(rl, scriptedAnswers, "Use pseudo-TTY for Codex? [Y/n]", existing.CODEX_USE_PTY === "0" ? "n" : "Y")) ? "1" : "0";
+  values.PORT = existing.PORT || "8787";
+  values.HOST = existing.HOST || "127.0.0.1";
+  values.TUNNEL = existing.TUNNEL || "auto";
+  values.NOTIFY_ON_START = "0";
+  values.WEBHOOK_BEARER_SECRET = existing.WEBHOOK_BEARER_SECRET || crypto.randomBytes(24).toString("hex");
+  values.CODEX_USE_PTY = existing.CODEX_USE_PTY || "1";
 
   if (rl) rl.close();
+
+  const missing = [];
+  if (!values.EASYHOOK_API_KEY) missing.push("Easyhook API key");
+  if (!values.EASYHOOK_FROM) missing.push("WhatsApp sender number");
+  if (!values.ALLOWED_USERS) missing.push("allowed WhatsApp user number");
+  if (missing.length) {
+    console.error("");
+    console.error(`Missing required setup value(s): ${missing.join(", ")}`);
+    console.error("Run again with: codex-whatsapp setup");
+    process.exit(1);
+  }
 
   fs.mkdirSync(CONFIG_DIR, { recursive: true });
   fs.writeFileSync(CONFIG_FILE, formatEnv(values), { mode: 0o600 });
@@ -86,13 +97,11 @@ async function runSetup() {
   console.log(`Config saved: ${CONFIG_FILE}`);
   console.log("");
   console.log("Next:");
-  console.log("  codex-whatsapp start --tunnel");
+  console.log("  codex-whatsapp start");
   console.log("");
-
-  if (values.TUNNEL === "1") {
-    console.log("When it starts, copy this URL into Easyhook webhooks:");
-    console.log("  https://xxxx.trycloudflare.com/webhook");
-  }
+  console.log("When it starts, it will open Cloudflare Tunnel automatically and print:");
+  console.log("  1. Webhook URL for Easyhook");
+  console.log("  2. Bearer secret to paste into Easyhook");
 
   if (process.argv.includes("--start")) {
     console.log("");
@@ -106,7 +115,6 @@ async function runSetup() {
 function startServerWithEnv() {
   return new Promise((resolve) => {
     const args = [process.argv[1], "start"];
-    if (process.env.TUNNEL === "1") args.push("--tunnel");
     const child = spawn(process.execPath, args, {
       stdio: "inherit",
       env: process.env,
@@ -181,8 +189,12 @@ function startCloudflareTunnel() {
     state.tunnelUrl = `${match[0]}/webhook`;
     const message = [
       "Cloudflare Tunnel activo.",
-      `Webhook Easyhook: ${state.tunnelUrl}`,
-      config.webhookBearerSecret ? "Authorization: Bearer <WEBHOOK_BEARER_SECRET>" : "",
+      "",
+      "Configura Easyhook asi:",
+      `Webhook URL: ${state.tunnelUrl}`,
+      config.webhookBearerSecret ? `Bearer secret: ${config.webhookBearerSecret}` : "",
+      "",
+      "Despues manda /status por WhatsApp para probar.",
     ].filter(Boolean).join("\n");
 
     console.log(`\n${message}\n`);
@@ -372,7 +384,7 @@ function helpText() {
 
 Arranque:
 codex-whatsapp setup
-codex-whatsapp start --tunnel`;
+codex-whatsapp start`;
 }
 
 async function sendText(to, body) {
@@ -431,6 +443,21 @@ function hasCommand(name) {
 
 function quoteShell(value) {
   return `'${String(value).replaceAll("'", "'\\''")}'`;
+}
+
+function shouldStartTunnel(host) {
+  if (process.argv.includes("--no-tunnel") || process.env.TUNNEL === "0") return false;
+  if (process.argv.includes("--tunnel") || process.env.TUNNEL === "1") return true;
+  return isPrivateOrLocalHost(host);
+}
+
+function isPrivateOrLocalHost(host) {
+  const value = String(host || "").toLowerCase();
+  if (value === "localhost" || value === "127.0.0.1" || value === "0.0.0.0" || value === "::1") return true;
+  if (value.startsWith("10.") || value.startsWith("192.168.")) return true;
+  const parts = value.split(".").map(Number);
+  if (parts.length === 4 && parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
+  return false;
 }
 
 async function ask(rl, scriptedAnswers, label, defaultValue) {
